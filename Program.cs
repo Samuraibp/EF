@@ -108,7 +108,6 @@ class Program
         }
     }
 
-    // ---------------- CONNECT / DISCONNECT ----------------
 
     static void Connect()
     {
@@ -134,7 +133,6 @@ class Program
         Console.WriteLine("Disconnected from database.");
     }
 
-    // ---------------- CHECK ----------------
 
     static bool EnsureConnected()
     {
@@ -146,7 +144,6 @@ class Program
         return true;
     }
 
-    // ---------------- METHODS ----------------
 
     static void ShowProducts()
     {
