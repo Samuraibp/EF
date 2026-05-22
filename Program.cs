@@ -1,22 +1,38 @@
-﻿using System;
+﻿using ConsoleApp5.Models;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using System;
+using System.IO;
 using System.Linq;
-using ConsoleApp5.Models;
 
 class Program
 {
-    static ApplicationContext context;
+    static DbContextOptions<ApplicationContext> options;
+    static bool isConnected = false;
 
     static void Main()
     {
+        var builder = new ConfigurationBuilder();
+
+        builder.SetBasePath(Directory.GetCurrentDirectory());
+        builder.AddJsonFile("appsettings.json");
+
+        var config = builder.Build();
+        var connectionString = config.GetConnectionString("DefaultConnection");
+
+        var optionsBuilder = new DbContextOptionsBuilder<ApplicationContext>();
+        options = optionsBuilder.UseSqlServer(connectionString).Options;
+
         bool running = true;
 
         while (running)
         {
             Console.WriteLine("\n=== MENU ===");
+
             Console.WriteLine("1. Connect to database");
             Console.WriteLine("2. Disconnect from database");
 
-            Console.WriteLine("\n--- BASIC ---");
+            Console.WriteLine("\n--- DATA ---");
             Console.WriteLine("3. Show all products");
             Console.WriteLine("4. Show product types");
             Console.WriteLine("5. Show suppliers");
@@ -34,7 +50,6 @@ class Program
             Console.WriteLine("0. Exit");
 
             Console.Write("Choose option: ");
-
             string choice = Console.ReadLine();
 
             try
@@ -79,7 +94,6 @@ class Program
 
                     case "0":
                         running = false;
-                        Disconnect();
                         break;
 
                     default:
@@ -94,162 +108,182 @@ class Program
         }
     }
 
-    // ================= CONNECTION =================
+    // ---------------- CONNECT / DISCONNECT ----------------
 
     static void Connect()
     {
-        try
+        if (isConnected)
         {
-            context = new ApplicationContext();
+            Console.WriteLine("Already connected.");
+            return;
+        }
 
-            if (context.Database.CanConnect())
-                Console.WriteLine("SUCCESS: Connected to database 'Sklad'.");
-            else
-                Console.WriteLine("FAILED: Cannot connect to database.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("CONNECTION ERROR: " + ex.Message);
-        }
+        isConnected = true;
+        Console.WriteLine("Connected to database.");
     }
 
     static void Disconnect()
     {
-        try
+        if (!isConnected)
         {
-            if (context != null)
-            {
-                context.Dispose();
-                context = null;
-                Console.WriteLine("Disconnected from database.");
-            }
-            else
-            {
-                Console.WriteLine("Already disconnected.");
-            }
+            Console.WriteLine("Already disconnected.");
+            return;
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine("DISCONNECT ERROR: " + ex.Message);
-        }
+
+        isConnected = false;
+        Console.WriteLine("Disconnected from database.");
     }
 
-    // ================= BASIC =================
+    // ---------------- CHECK ----------------
+
+    static bool EnsureConnected()
+    {
+        if (!isConnected)
+        {
+            Console.WriteLine("ERROR: You are not connected to database.");
+            return false;
+        }
+        return true;
+    }
+
+    // ---------------- METHODS ----------------
 
     static void ShowProducts()
     {
-        EnsureConnected();
+        if (!EnsureConnected()) return;
 
-        Console.WriteLine("\n=== ALL PRODUCTS ===");
-        foreach (var p in context.Products)
-            Console.WriteLine($"{p.Name} | {p.Type} | {p.Supplier} | {p.Quantity} | {p.CostPrice} | {p.SupplyDate}");
+        using (var context = new ApplicationContext(options))
+        {
+            Console.WriteLine("\n=== ALL PRODUCTS ===");
+
+            foreach (var p in context.Products)
+            {
+                Console.WriteLine($"{p.Name} | {p.Type} | {p.Supplier} | {p.Quantity} | {p.CostPrice} | {p.SupplyDate}");
+            }
+        }
     }
 
     static void ShowTypes()
     {
-        EnsureConnected();
+        if (!EnsureConnected()) return;
 
-        Console.WriteLine("\n=== PRODUCT TYPES ===");
-        foreach (var t in context.Products.Select(p => p.Type).Distinct())
-            Console.WriteLine(t);
+        using (var context = new ApplicationContext(options))
+        {
+            Console.WriteLine("\n=== PRODUCT TYPES ===");
+
+            foreach (var t in context.Products.Select(p => p.Type).Distinct())
+            {
+                Console.WriteLine(t);
+            }
+        }
     }
 
     static void ShowSuppliers()
     {
-        EnsureConnected();
+        if (!EnsureConnected()) return;
 
-        Console.WriteLine("\n=== SUPPLIERS ===");
-        foreach (var s in context.Products.Select(p => p.Supplier).Distinct())
-            Console.WriteLine(s);
+        using (var context = new ApplicationContext(options))
+        {
+            Console.WriteLine("\n=== SUPPLIERS ===");
+
+            foreach (var s in context.Products.Select(p => p.Supplier).Distinct())
+            {
+                Console.WriteLine(s);
+            }
+        }
     }
-
-    // ================= STATISTICS =================
 
     static void ShowStatistics()
     {
-        EnsureConnected();
+        if (!EnsureConnected()) return;
 
-        var maxQty = context.Products.OrderByDescending(p => p.Quantity).First();
-        var minQty = context.Products.OrderBy(p => p.Quantity).First();
+        using (var context = new ApplicationContext(options))
+        {
+            var maxQty = context.Products.OrderByDescending(p => p.Quantity).First();
+            var minQty = context.Products.OrderBy(p => p.Quantity).First();
 
-        var maxCost = context.Products.OrderByDescending(p => p.CostPrice).First();
-        var minCost = context.Products.OrderBy(p => p.CostPrice).First();
+            var maxCost = context.Products.OrderByDescending(p => p.CostPrice).First();
+            var minCost = context.Products.OrderBy(p => p.CostPrice).First();
 
-        Console.WriteLine("\n=== MAX QUANTITY ===");
-        Console.WriteLine($"{maxQty.Name} - {maxQty.Quantity}");
+            Console.WriteLine("\n=== MAX QUANTITY ===");
+            Console.WriteLine($"{maxQty.Name} - {maxQty.Quantity}");
 
-        Console.WriteLine("\n=== MIN QUANTITY ===");
-        Console.WriteLine($"{minQty.Name} - {minQty.Quantity}");
+            Console.WriteLine("\n=== MIN QUANTITY ===");
+            Console.WriteLine($"{minQty.Name} - {minQty.Quantity}");
 
-        Console.WriteLine("\n=== MAX COST ===");
-        Console.WriteLine($"{maxCost.Name} - {maxCost.CostPrice}");
+            Console.WriteLine("\n=== MAX COST ===");
+            Console.WriteLine($"{maxCost.Name} - {maxCost.CostPrice}");
 
-        Console.WriteLine("\n=== MIN COST ===");
-        Console.WriteLine($"{minCost.Name} - {minCost.CostPrice}");
+            Console.WriteLine("\n=== MIN COST ===");
+            Console.WriteLine($"{minCost.Name} - {minCost.CostPrice}");
 
-        Console.WriteLine("\n=== AVERAGE QUANTITY BY TYPE ===");
+            Console.WriteLine("\n=== AVERAGE QUANTITY BY TYPE ===");
 
-        var avg = context.Products
-            .GroupBy(p => p.Type)
-            .Select(g => new
+            var avg = context.Products
+                .GroupBy(p => p.Type)
+                .Select(g => new
+                {
+                    Type = g.Key,
+                    AvgQuantity = g.Average(x => x.Quantity)
+                });
+
+            foreach (var a in avg)
             {
-                Type = g.Key,
-                AvgQuantity = g.Average(x => x.Quantity)
-            });
-
-        foreach (var a in avg)
-            Console.WriteLine($"{a.Type} - {a.AvgQuantity}");
+                Console.WriteLine($"{a.Type} - {a.AvgQuantity}");
+            }
+        }
     }
-
-    // ================= FILTERS (TASK 4) =================
 
     static void ShowProductsByType()
     {
-        EnsureConnected();
+        if (!EnsureConnected()) return;
 
-        Console.Write("Enter product type: ");
-        string type = Console.ReadLine();
+        using (var context = new ApplicationContext(options))
+        {
+            Console.Write("Enter product type: ");
+            string type = Console.ReadLine();
 
-        Console.WriteLine($"\n=== PRODUCTS OF TYPE {type} ===");
+            Console.WriteLine($"\n=== PRODUCTS OF TYPE {type} ===");
 
-        var result = context.Products.Where(p => p.Type == type);
+            var result = context.Products.Where(p => p.Type == type);
 
-        foreach (var p in result)
-            Console.WriteLine($"{p.Name} | {p.Quantity} | {p.CostPrice}");
+            foreach (var p in result)
+            {
+                Console.WriteLine($"{p.Name} | {p.Quantity} | {p.CostPrice}");
+            }
+        }
     }
 
     static void ShowProductsBySupplier()
     {
-        EnsureConnected();
+        if (!EnsureConnected()) return;
 
-        Console.Write("Enter supplier: ");
-        string supplier = Console.ReadLine();
+        using (var context = new ApplicationContext(options))
+        {
+            Console.Write("Enter supplier: ");
+            string supplier = Console.ReadLine();
 
-        Console.WriteLine($"\n=== PRODUCTS FROM SUPPLIER {supplier} ===");
+            Console.WriteLine($"\n=== PRODUCTS FROM SUPPLIER {supplier} ===");
 
-        var result = context.Products.Where(p => p.Supplier == supplier);
+            var result = context.Products.Where(p => p.Supplier == supplier);
 
-        foreach (var p in result)
-            Console.WriteLine($"{p.Name} | {p.Quantity} | {p.CostPrice}");
+            foreach (var p in result)
+            {
+                Console.WriteLine($"{p.Name} | {p.Quantity} | {p.CostPrice}");
+            }
+        }
     }
-
-    // ================= SPECIAL =================
 
     static void ShowOldestProduct()
     {
-        EnsureConnected();
+        if (!EnsureConnected()) return;
 
-        var oldest = context.Products.OrderBy(p => p.SupplyDate).First();
+        using (var context = new ApplicationContext(options))
+        {
+            var oldest = context.Products.OrderBy(p => p.SupplyDate).First();
 
-        Console.WriteLine("\n=== OLDEST PRODUCT ===");
-        Console.WriteLine($"{oldest.Name} - {oldest.SupplyDate}");
-    }
-
-    // ================= SAFETY =================
-
-    static void EnsureConnected()
-    {
-        if (context == null)
-            throw new Exception("Database is not connected. Please connect first.");
+            Console.WriteLine("\n=== OLDEST PRODUCT ===");
+            Console.WriteLine($"{oldest.Name} - {oldest.SupplyDate}");
+        }
     }
 }
